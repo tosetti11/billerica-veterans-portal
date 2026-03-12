@@ -46,6 +46,8 @@ export default function FormFillPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [caseId, setCaseId] = useState<string | null>(null);
+  const [caseNumber, setCaseNumber] = useState<string | null>(null);
+  const [pdfGenerated, setPdfGenerated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
@@ -127,6 +129,8 @@ export default function FormFillPage() {
 
       const result = await res.json();
       setCaseId(result.caseId);
+      setCaseNumber(result.caseNumber || null);
+      setPdfGenerated(result.pdfGenerated || false);
       setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submission failed");
@@ -184,6 +188,23 @@ export default function FormFillPage() {
           <p className="text-gray-600 mb-2">
             Your <strong>{template?.name}</strong> has been submitted and a case has been created.
           </p>
+          {caseNumber && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-3">
+              <p className="text-sm text-blue-800">
+                Your case number is{" "}
+                <span className="font-bold text-blue-900 text-base">{caseNumber}</span>
+              </p>
+              <p className="text-xs text-blue-600 mt-1">Save this number for your records.</p>
+            </div>
+          )}
+          {pdfGenerated && (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-3">
+              <div className="flex items-center justify-center gap-2 text-sm text-green-800">
+                <FileText className="w-4 h-4" />
+                <span>A filled PDF form has been generated and saved to your documents.</span>
+              </div>
+            </div>
+          )}
           <p className="text-gray-500 text-sm mb-6">
             The Veterans Service Officer will review your submission and follow up with you.
             You can track the status of your case in the portal.
@@ -195,6 +216,15 @@ export default function FormFillPage() {
             >
               View My Cases
             </Link>
+            {pdfGenerated && (
+              <Link
+                href="/documents"
+                className="inline-flex items-center justify-center gap-2 bg-green-700 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-green-800 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                View Documents
+              </Link>
+            )}
             <Link
               href="/forms"
               className="inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg font-medium hover:bg-gray-200 transition-colors"

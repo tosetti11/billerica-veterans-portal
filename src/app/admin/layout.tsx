@@ -11,6 +11,7 @@ import {
   Settings,
   Flag,
   ArrowLeft,
+  ClipboardList,
 } from "lucide-react";
 
 const adminNav = [
@@ -18,6 +19,7 @@ const adminNav = [
   { href: "/admin/cases", label: "Cases", icon: Briefcase },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
   { href: "/admin/forms", label: "Form Templates", icon: FileText },
+  { href: "/admin/submissions", label: "Submissions", icon: ClipboardList },
   { href: "/admin/veterans", label: "Veterans", icon: Users },
   { href: "/admin/messages", label: "Messages", icon: MessageSquare },
   { href: "/admin/settings", label: "Settings", icon: Settings },
