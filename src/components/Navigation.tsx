@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import {
   Menu,
   X,
@@ -14,12 +15,17 @@ import {
   Upload,
   Phone,
   Flag,
+  LogIn,
+  LogOut,
+  Settings,
+  User,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/services", label: "Services", icon: Shield },
   { href: "/apply", label: "Apply Online", icon: FileText },
+  { href: "/forms", label: "Forms", icon: FileText },
   { href: "/appointments", label: "Appointments", icon: Calendar },
   { href: "/status", label: "Track Status", icon: Search },
   { href: "/documents", label: "Documents", icon: Upload },
@@ -29,6 +35,8 @@ const navItems = [
 export default function Navigation() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
 
   return (
     <>
@@ -46,6 +54,30 @@ export default function Navigation() {
             >
               vso@billerica.gov
             </a>
+            <span className="text-white/30">|</span>
+            {session ? (
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  {session.user?.name}
+                </span>
+                {isAdmin && (
+                  <Link href="/admin" className="hover:text-accent transition flex items-center gap-1">
+                    <Settings className="w-3 h-3" /> Admin
+                  </Link>
+                )}
+                <button
+                  onClick={() => signOut({ callbackUrl: "/" })}
+                  className="hover:text-accent transition flex items-center gap-1"
+                >
+                  <LogOut className="w-3 h-3" /> Sign Out
+                </button>
+              </div>
+            ) : (
+              <Link href="/login" className="hover:text-accent transition flex items-center gap-1">
+                <LogIn className="w-3 h-3" /> Sign In
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -139,6 +171,39 @@ export default function Navigation() {
                 >
                   vso@billerica.gov
                 </a>
+                <div className="mt-2 pt-2 border-t border-white/20">
+                  {session ? (
+                    <>
+                      <div className="py-1 text-sm text-blue-200 flex items-center gap-2">
+                        <User className="w-4 h-4" />
+                        {session.user?.name}
+                      </div>
+                      {isAdmin && (
+                        <Link
+                          href="/admin"
+                          onClick={() => setMobileOpen(false)}
+                          className="flex items-center gap-2 py-2 text-sm text-blue-200 hover:text-white"
+                        >
+                          <Settings className="w-4 h-4" /> Admin Panel
+                        </Link>
+                      )}
+                      <button
+                        onClick={() => { setMobileOpen(false); signOut({ callbackUrl: "/" }); }}
+                        className="flex items-center gap-2 py-2 text-sm text-blue-200 hover:text-white"
+                      >
+                        <LogOut className="w-4 h-4" /> Sign Out
+                      </button>
+                    </>
+                  ) : (
+                    <Link
+                      href="/login"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center gap-2 py-2 text-sm text-accent hover:text-white font-medium"
+                    >
+                      <LogIn className="w-4 h-4" /> Sign In
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
           )}

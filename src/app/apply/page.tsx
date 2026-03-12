@@ -26,6 +26,7 @@ export default function ApplyPage() {
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [confirmId, setConfirmId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     service: '', firstName: '', lastName: '', email: '', phone: '',
     address: '', city: 'Billerica', state: 'MA', zip: '',
@@ -38,12 +39,37 @@ export default function ApplyPage() {
   const update = (field: string, value: string | boolean) =>
     setForm(prev => ({ ...prev, [field]: value }));
 
-  const handleSubmit = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    const s1 = Array.from({length:6}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
-    const s2 = Array.from({length:4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
-    setConfirmId('BVS-' + s1 + '-' + s2);
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const serviceName = services.find(s => s.id === form.service)?.name || form.service;
+      const res = await fetch('/api/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service: form.service,
+          serviceName,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          phone: form.phone,
+          address: form.address,
+          city: form.city,
+          state: form.state,
+          zip: form.zip,
+          branch: form.branch,
+          serviceStart: form.serviceStart,
+          serviceEnd: form.serviceEnd,
+          dischargeType: form.dischargeType,
+        }),
+      });
+      const data = await res.json();
+      setConfirmId(data.caseNumber || 'BVS-SUBMITTED');
+      setSubmitted(true);
+    } catch {
+      alert('Submission failed. Please try again.');
+    }
+    setSubmitting(false);
   };
 
   if (submitted) {

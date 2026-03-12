@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Auth & Users ──────────────────────────────────────────
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String
+  role           String    @default("veteran") // "veteran" | "admin"
+  firstName      String
+  lastName       String
+  phone          String?
+  address        String?
+  city           String?
+  state          String?
+  zip            String?
+  branch         String?   // military branch
+  serviceStart   String?
+  serviceEnd     String?
+  dischargeStatus String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  cases          Case[]           @relation("VeteranCases")
+  assignedCases  Case[]           @relation("AssignedCases")
+  caseNotes      CaseNote[]
+  appointments   Appointment[]
+  documents      Document[]
+  formSubmissions FormSubmission[]
+  contactMessages ContactMessage[]
+}
+
+// ─── Case Management ──────────────────────────────────────
+
+model Case {
+  id          String   @id @default(cuid())
+  caseNumber  String   @unique
+  veteranId   String
+  assignedToId String?
+  
+  caseType    String   // "va_disability" | "property_tax_abatement" | "pension" | "education" | "healthcare" | "employment" | "housing" | "burial" | "other"
+  title       String
+  description String
+  status      String   @default("open") // "open" | "in_progress" | "pending_documents" | "under_review" | "approved" | "denied" | "closed"
+  priority    String   @default("normal") // "low" | "normal" | "high" | "urgent"
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+
+  veteran     User     @relation("VeteranCases", fields: [veteranId], references: [id])
+  assignedTo  User?    @relation("AssignedCases", fields: [assignedToId], references: [id])
+  notes       CaseNote[]
+  documents   Document[]
+  appointments Appointment[]
+  formSubmissions FormSubmission[]
+}
+
+model CaseNote {
+  id        String   @id @default(cuid())
+  caseId    String
+  authorId  String
+  content   String
+  isInternal Boolean @default(false) // internal notes not visible to veteran
+  createdAt DateTime @default(now())
+
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id])
+}
+
+// ─── Appointments ─────────────────────────────────────────
+
+model AppointmentSlot {
+  id          String   @id @default(cuid())
+  dayOfWeek   Int?     // 0=Sunday ... 6=Saturday (recurring)
+  specificDate String? // "2026-03-15" (one-off)
+  startTime   String   // "09:00"
+  endTime     String   // "09:30"
+  isRecurring Boolean  @default(true)
+  isBlocked   Boolean  @default(false)
+  blockReason String?
+  createdAt   DateTime @default(now())
+}
+
+model Appointment {
+  id              String   @id @default(cuid())
+  veteranId       String
+  caseId          String?
+  appointmentType String   // "initial_consultation" | "follow_up" | "document_review" | "claims_assistance" | "general"
+  date            String   // "2026-03-15"
+  startTime       String   // "09:00"
+  endTime         String   // "09:30"
+  status          String   @default("scheduled") // "scheduled" | "confirmed" | "completed" | "cancelled" | "no_show"
+  notes           String?
+  veteranNotes    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  veteran         User     @relation(fields: [veteranId], references: [id])
+  case            Case?    @relation(fields: [caseId], references: [id])
+}
+
+// ─── Documents ────────────────────────────────────────────
+
+model Document {
+  id          String   @id @default(cuid())
+  veteranId   String
+  caseId      String?
+  fileName    String
+  fileSize    Int
+  fileType    String
+  filePath    String
+  category    String   @default("general") // "dd214" | "medical" | "financial" | "identification" | "correspondence" | "form_submission" | "general"
+  description String?
+  uploadedAt  DateTime @default(now())
+
+  veteran     User     @relation(fields: [veteranId], references: [id])
+  case        Case?    @relation(fields: [caseId], references: [id])
+}
+
+// ─── Forms ────────────────────────────────────────────────
+
+model FormTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  serviceType String
+  fields      String   // JSON array of field definitions
+  isActive    Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  submissions FormSubmission[]
+}
+
+model FormSubmission {
+  id          String   @id @default(cuid())
+  formId      String
+  veteranId   String
+  caseId      String?
+  data        String   // JSON of submitted data
+  status      String   @default("submitted") // "draft" | "submitted" | "reviewed" | "approved" | "rejected"
+  reviewNotes String?
+  submittedAt DateTime @default(now())
+  reviewedAt  DateTime?
+
+  form        FormTemplate @relation(fields: [formId], references: [id])
+  veteran     User         @relation(fields: [veteranId], references: [id])
+  case        Case?        @relation(fields: [caseId], references: [id])
+}
+
+// ─── Contact ──────────────────────────────────────────────
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  userId    String?
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  status    String   @default("unread") // "unread" | "read" | "replied" | "archived"
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id])
+}

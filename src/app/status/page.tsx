@@ -1,81 +1,203 @@
 "use client";
-import { useState } from "react";
-import { Search, Clock, CheckCircle, AlertCircle, FileText, Calendar, ArrowRight, XCircle, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import {
+  Search, Clock, CheckCircle, AlertCircle, FileText, Calendar,
+  ArrowRight, XCircle, Loader2, MessageSquare, ChevronDown, ChevronUp
+} from "lucide-react";
 
-const demoApplications = [
-  {
-    id: "BVS-M2X8KP-A3FQ",
-    service: "Chapter 115 Financial Assistance",
-    submitted: "2026-02-15",
-    status: "in-review",
-    statusLabel: "Under Review",
-    updates: [
-      { date: "2026-02-15", text: "Application submitted online", status: "complete" },
-      { date: "2026-02-17", text: "Application received and logged", status: "complete" },
-      { date: "2026-02-20", text: "Documents verified by staff", status: "complete" },
-      { date: "2026-02-25", text: "Under review by Veterans Service Officer", status: "current" },
-      { date: "", text: "Final determination", status: "pending" },
-      { date: "", text: "Notification sent to applicant", status: "pending" },
-    ],
-  },
-  {
-    id: "BVS-K9P4TN-B7WE",
-    service: "Property Tax Abatement",
-    submitted: "2026-01-20",
-    status: "approved",
-    statusLabel: "Approved",
-    updates: [
-      { date: "2026-01-20", text: "Application submitted online", status: "complete" },
-      { date: "2026-01-22", text: "Application received and logged", status: "complete" },
-      { date: "2026-01-28", text: "Documents verified", status: "complete" },
-      { date: "2026-02-05", text: "Reviewed by VSO Donnie Jarvis", status: "complete" },
-      { date: "2026-02-10", text: "Approved - Forwarded to Tax Assessor", status: "complete" },
-      { date: "2026-02-12", text: "Notification sent to applicant", status: "complete" },
-    ],
-  },
-  {
-    id: "APT-R5M2KN-C8XP",
-    service: "Appointment - VA Disability Claims",
-    submitted: "2026-03-05",
-    status: "scheduled",
-    statusLabel: "Scheduled",
-    updates: [
-      { date: "2026-03-05", text: "Appointment request submitted", status: "complete" },
-      { date: "2026-03-05", text: "Appointment confirmed for March 15, 2026 at 10:00 AM", status: "complete" },
-      { date: "", text: "Appointment date: March 15, 2026", status: "pending" },
-    ],
-  },
-];
+type CaseNote = {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: { firstName: string; lastName: string; role: string };
+};
+
+type CaseData = {
+  id: string;
+  caseNumber: string;
+  caseType: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  createdAt: string;
+  updatedAt: string;
+  assignedTo: { firstName: string; lastName: string } | null;
+  notes: CaseNote[];
+  appointments: { id: string; date: string; startTime: string; endTime: string; status: string; appointmentType: string }[];
+  _count: { documents: number; formSubmissions: number };
+};
+
+const statusConfig: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
+  open: { label: "Open", color: "bg-blue-100 text-blue-800", icon: Clock },
+  in_progress: { label: "In Progress", color: "bg-yellow-100 text-yellow-800", icon: Clock },
+  pending_documents: { label: "Pending Documents", color: "bg-orange-100 text-orange-800", icon: FileText },
+  under_review: { label: "Under Review", color: "bg-purple-100 text-purple-800", icon: Search },
+  approved: { label: "Approved", color: "bg-green-100 text-green-800", icon: CheckCircle },
+  denied: { label: "Denied", color: "bg-red-100 text-red-800", icon: XCircle },
+  closed: { label: "Closed", color: "bg-gray-100 text-gray-800", icon: CheckCircle },
+};
+
+const typeLabels: Record<string, string> = {
+  va_disability: "VA Disability Claim",
+  property_tax_abatement: "Property Tax Abatement",
+  pension: "Pension",
+  education: "Education Benefits",
+  healthcare: "Healthcare",
+  employment: "Employment Assistance",
+  housing: "Housing Assistance",
+  burial: "Burial Benefits",
+  other: "Other",
+};
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatTime(time24: string) {
+  const [h, m] = time24.split(":");
+  const hour = parseInt(h);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${h12}:${m} ${ampm}`;
+}
+
+function CaseCard({ c }: { c: CaseData }) {
+  const [expanded, setExpanded] = useState(false);
+  const status = statusConfig[c.status] || statusConfig.open;
+  const StatusIcon = status.icon;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-border overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <span className="font-mono text-xs text-muted">{c.caseNumber}</span>
+            <h3 className="font-semibold text-primary mt-0.5">{c.title}</h3>
+          </div>
+          <span className={`${status.color} px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1`}>
+            <StatusIcon className="w-3 h-3" /> {status.label}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+          <div>
+            <span className="text-muted text-xs">Type</span>
+            <p className="font-medium">{typeLabels[c.caseType] || c.caseType}</p>
+          </div>
+          <div>
+            <span className="text-muted text-xs">Submitted</span>
+            <p className="font-medium">{formatDate(c.createdAt)}</p>
+          </div>
+          <div>
+            <span className="text-muted text-xs">Assigned To</span>
+            <p className="font-medium">{c.assignedTo ? `${c.assignedTo.firstName} ${c.assignedTo.lastName}` : "Unassigned"}</p>
+          </div>
+          <div>
+            <span className="text-muted text-xs">Last Updated</span>
+            <p className="font-medium">{formatDate(c.updatedAt)}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 text-xs text-muted">
+          <span className="flex items-center gap-1"><FileText className="w-3 h-3" /> {c._count.documents} docs</span>
+          <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {c.notes.length} notes</span>
+          <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {c.appointments.length} appts</span>
+        </div>
+      </div>
+
+      <button onClick={() => setExpanded(!expanded)}
+        className="w-full border-t border-border px-5 py-2.5 text-sm text-primary font-medium flex items-center justify-center gap-1 hover:bg-gray-50 transition">
+        {expanded ? <><ChevronUp className="w-4 h-4" /> Less Details</> : <><ChevronDown className="w-4 h-4" /> More Details</>}
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border px-5 py-4 bg-gray-50 space-y-4">
+          <div>
+            <h4 className="font-medium text-sm mb-1">Description</h4>
+            <p className="text-sm text-muted">{c.description}</p>
+          </div>
+
+          {c.notes.length > 0 && (
+            <div>
+              <h4 className="font-medium text-sm mb-2">Notes & Updates</h4>
+              <div className="space-y-2">
+                {c.notes.map((note) => (
+                  <div key={note.id} className="bg-white rounded-lg p-3 border border-border">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-primary">{note.author.firstName} {note.author.lastName}</span>
+                      <span className="text-xs text-muted">{formatDate(note.createdAt)}</span>
+                    </div>
+                    <p className="text-sm">{note.content}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {c.appointments.length > 0 && (
+            <div>
+              <h4 className="font-medium text-sm mb-2">Related Appointments</h4>
+              <div className="space-y-1">
+                {c.appointments.map((apt) => (
+                  <div key={apt.id} className="bg-white rounded-lg p-2 border border-border text-sm flex items-center justify-between">
+                    <span>{formatDate(apt.date)} at {formatTime(apt.startTime)}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${apt.status === "completed" ? "bg-green-100 text-green-700" : apt.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                      {apt.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function StatusPage() {
-  const [trackingId, setTrackingId] = useState("");
-  const [searchPerformed, setSearchPerformed] = useState(false);
-  const [results, setResults] = useState<typeof demoApplications>([]);
-  const [searching, setSearching] = useState(false);
+  const { data: session, status: authStatus } = useSession();
+  const [cases, setCases] = useState<CaseData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
 
-  const handleSearch = () => {
-    setSearching(true);
-    setTimeout(() => {
-      if (trackingId.trim() === "") {
-        setResults(demoApplications);
-      } else {
-        const found = demoApplications.filter((a) =>
-          a.id.toLowerCase().includes(trackingId.toLowerCase())
-        );
-        setResults(found);
-      }
-      setSearchPerformed(true);
-      setSearching(false);
-    }, 800);
-  };
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    fetch("/api/cases")
+      .then((r) => r.json())
+      .then((data) => {
+        setCases(data.cases || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [authStatus]);
 
-  const statusColors: Record<string, string> = {
-    "in-review": "bg-blue-100 text-blue-700 border-blue-200",
-    approved: "bg-green-100 text-green-700 border-green-200",
-    denied: "bg-red-100 text-red-700 border-red-200",
-    scheduled: "bg-purple-100 text-purple-700 border-purple-200",
-    pending: "bg-amber-100 text-amber-700 border-amber-200",
-  };
+  if (authStatus === "loading") {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="fade-in max-w-2xl mx-auto px-4 py-16 text-center">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-8">
+          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-amber-800 mb-2">Login Required</h2>
+          <p className="text-amber-700 mb-6">Log in to view your case status and applications.</p>
+          <a href="/login" className="bg-primary text-white px-6 py-2.5 rounded-lg hover:bg-primary-light transition font-medium text-sm">
+            Log In / Register
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  const filteredCases = filter === "all" ? cases : cases.filter((c) => c.status === filter);
 
   return (
     <div className="fade-in">
@@ -83,117 +205,54 @@ export default function StatusPage() {
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex items-center gap-2 mb-2">
             <Search className="w-6 h-6 text-accent" />
-            <span className="text-accent font-medium">Application Tracker</span>
+            <span className="text-accent font-medium">Case Status</span>
           </div>
-          <h1 className="text-3xl font-bold mb-2">Track Your Application</h1>
-          <p className="text-blue-100">Enter your confirmation number to check the status of your application or appointment.</p>
+          <h1 className="text-3xl font-bold mb-2">My Cases & Applications</h1>
+          <p className="text-blue-100">Track the status of your benefit requests and appointments.</p>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Search Box */}
-        <div className="bg-white rounded-xl shadow-sm border border-border p-6">
-          <div className="flex gap-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
-              <input
-                type="text"
-                value={trackingId}
-                onChange={(e) => setTrackingId(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="Enter confirmation number (e.g., BVS-M2X8KP-A3FQ) or leave blank for demo"
-                className="w-full pl-10 pr-4 py-3 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              />
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : cases.length === 0 ? (
+          <div className="text-center py-12">
+            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-gray-500 mb-2">No Cases Yet</h3>
+            <p className="text-muted mb-6">You haven&apos;t submitted any benefit requests yet.</p>
+            <a href="/apply" className="bg-primary text-white px-6 py-2.5 rounded-lg hover:bg-primary-light transition font-medium text-sm inline-flex items-center gap-2">
+              <ArrowRight className="w-4 h-4" /> Apply for Benefits
+            </a>
+          </div>
+        ) : (
+          <>
+            {/* Filter tabs */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              {[
+                { value: "all", label: `All (${cases.length})` },
+                { value: "open", label: "Open" },
+                { value: "in_progress", label: "In Progress" },
+                { value: "pending_documents", label: "Pending Docs" },
+                { value: "under_review", label: "Under Review" },
+                { value: "approved", label: "Approved" },
+                { value: "denied", label: "Denied" },
+                { value: "closed", label: "Closed" },
+              ].filter((f) => f.value === "all" || cases.some((c) => c.status === f.value)).map((f) => (
+                <button key={f.value} onClick={() => setFilter(f.value)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${filter === f.value ? "bg-primary text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                  {f.label}
+                </button>
+              ))}
             </div>
-            <button
-              onClick={handleSearch}
-              disabled={searching}
-              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-light transition font-medium text-sm disabled:opacity-50 flex items-center gap-2"
-            >
-              {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              Search
-            </button>
-          </div>
-          <p className="text-xs text-muted mt-2">
-            Tip: Leave the search blank and click Search to see demo applications
-          </p>
-        </div>
 
-        {/* Results */}
-        {searchPerformed && (
-          <div className="mt-8 space-y-6">
-            {results.length === 0 ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center">
-                <AlertCircle className="w-12 h-12 text-amber-400 mx-auto mb-3" />
-                <h3 className="font-bold text-lg mb-2">No Applications Found</h3>
-                <p className="text-sm text-muted mb-4">No applications match that confirmation number.</p>
-                <p className="text-sm text-muted">
-                  If you believe this is an error, please contact us at{" "}
-                  <a href="tel:978-671-0968" className="text-primary-light underline">(978) 671-0968</a>
-                </p>
-              </div>
-            ) : (
-              results.map((app) => (
-                <div key={app.id} className="bg-white rounded-xl shadow-sm border border-border overflow-hidden slide-in">
-                  {/* Header */}
-                  <div className="p-6 border-b border-border">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <p className="text-xs text-muted mb-1">Confirmation Number</p>
-                        <p className="font-bold text-lg font-mono text-primary">{app.id}</p>
-                        <p className="text-sm text-muted mt-1">{app.service}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColors[app.status] || ""}`}>
-                          {app.statusLabel}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex gap-4 mt-3 text-xs text-muted">
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Submitted: {app.submitted}</span>
-                    </div>
-                  </div>
-
-                  {/* Timeline */}
-                  <div className="p-6">
-                    <h4 className="font-semibold text-primary mb-4">Progress Timeline</h4>
-                    <div className="space-y-4">
-                      {app.updates.map((update, i) => (
-                        <div key={i} className="flex gap-4">
-                          <div className="flex flex-col items-center">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                              update.status === "complete" ? "bg-green-100" :
-                              update.status === "current" ? "bg-blue-100 ring-4 ring-blue-50" :
-                              "bg-gray-100"
-                            }`}>
-                              {update.status === "complete" ? (
-                                <CheckCircle className="w-4 h-4 text-green-600" />
-                              ) : update.status === "current" ? (
-                                <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-                              ) : (
-                                <Clock className="w-4 h-4 text-gray-400" />
-                              )}
-                            </div>
-                            {i < app.updates.length - 1 && (
-                              <div className={`w-0.5 flex-1 mt-1 ${update.status === "complete" ? "bg-green-200" : "bg-gray-200"}`} />
-                            )}
-                          </div>
-                          <div className="pb-4">
-                            <p className={`text-sm font-medium ${update.status === "pending" ? "text-muted" : "text-foreground"}`}>
-                              {update.text}
-                            </p>
-                            {update.date && (
-                              <p className="text-xs text-muted mt-0.5">{update.date}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+            <div className="space-y-4">
+              {filteredCases.map((c) => (
+                <CaseCard key={c.id} c={c} />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
